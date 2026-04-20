@@ -1,139 +1,93 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import './Dashboard.css';
-
-// mock data
-const mockUsers = [
-  {
-    id: 1,
-    name: 'Juan Rulfo',
-    email: 'juan@example.com',
-    country: { code: 'mx', name: 'Mexico', flag: 'https://flagcdn.com/w40/mx.png' },
-    relation: 'Client',
-    company: 'Letras Corp',
-    state: 'Active',
-    gamesPlayed: 10,
-    maxScore: 20
-  },
-  {
-    id: 2,
-    name: 'Gabriel García Márquez',
-    email: 'gabo@example.com',
-    country: { code: 'co', name: 'Colombia', flag: 'https://flagcdn.com/w40/co.png' },
-    relation: 'Not related',
-    company: 'Macondo Inc',
-    state: 'Active',
-    gamesPlayed: 12,
-    maxScore: 19
-  },
-  {
-    id: 3,
-    name: 'Yoshihiro Togashi',
-    email: 'togashi@example.com',
-    country: { code: 'jp', name: 'Japan', flag: 'https://flagcdn.com/w40/jp.png' },
-    relation: 'Employee',
-    company: 'Rockwell Automation',
-    state: 'Not active ',
-    gamesPlayed: 15,
-    maxScore: 19
-  },
-  {
-    id: 4,
-    name: 'Friedrich Nietzsche',
-    email: 'friedrich@example.com',
-    country: { code: 'de', name: 'Germany', flag: 'https://flagcdn.com/w40/de.png' },
-    relation: 'Client',
-    company: 'Zarathustra LLC',
-    state: 'Active',
-    gamesPlayed: 20,
-    maxScore: 18
-  },
-  {
-    id: 5,
-    name: 'Victor Hugo',
-    email: 'victor@example.com',
-    country: { code: 'fr', name: 'France', flag: 'https://flagcdn.com/w40/fr.png' },
-    relation: 'Client',
-    company: 'Miserables Co',
-    state: 'Active',
-    gamesPlayed: 7,
-    maxScore: 17
-  },
-  {
-    id: 6,
-    name: 'Machado de Assis',
-    email: 'machado@example.com',
-    country: { code: 'br', name: 'Brazil', flag: 'https://flagcdn.com/w40/br.png' },
-    relation: 'Employee',
-    company: 'Rockwell Automation',
-    state: 'Active',
-    gamesPlayed: 8,
-    maxScore: 15
-  },
-  {
-    id: 7,
-    name: 'Pablo Neruda',
-    email: 'pablo@example.com',
-    country: { code: 'cl', name: 'Chile', flag: 'https://flagcdn.com/w40/cl.png' },
-    relation: 'Not related',
-    company: 'Il Postino',
-    state: 'Not active ',
-    gamesPlayed: 9,
-    maxScore: 15
-  },
-  {
-    id: 8,
-    name: 'Dante Alighieri',
-    email: 'dante@example.com',
-    country: { code: 'it', name: 'Italy', flag: 'https://flagcdn.com/w40/it.png' },
-    relation: 'Client',
-    company: 'Inferno Ltd',
-    state: 'Active',
-    gamesPlayed: 14,
-    maxScore: 13
-  },
-  {
-    id: 9,
-    name: 'Sun Tzu',
-    email: 'sun@example.com',
-    country: { code: 'cn', name: 'China', flag: 'https://flagcdn.com/w40/cn.png' },
-    relation: 'Employee',
-    company: 'Rockwell Automation',
-    state: 'Active',
-    gamesPlayed: 22,
-    maxScore: 12
-  },
-  {
-    id: 10,
-    name: 'Virginia Woolf',
-    email: 'virginia@example.com',
-    country: { code: 'gb', name: 'United Kingdom', flag: 'https://flagcdn.com/w40/gb.png' },
-    relation: 'Client',
-    company: 'Bloomsbury Group',
-    state: 'Not active ',
-    gamesPlayed: 3,
-    maxScore: 12
-  }
-];
+import { fetchDashboardData } from '../services/dashboard.js';
 
 function Dashboard() {
+
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {  
+    const fetchDashboard = async () => {
+      const dashboardData = await fetchDashboardData();
+      setUsers(dashboardData);
+    };
+
+    fetchDashboard();
+  }, []);
+
   const [searchTerm, setSearchTerm] = useState('');
   const [filterRelation, setFilterRelation] = useState('');
   const [filterCountry, setFilterCountry] = useState('');
+  const scores = users.map(user => user.score);
+  const minScore = Math.min(...scores);
+  const maxScore = Math.max(...scores);
+  const [filterScoreMin, setFilterScoreMin] = useState(minScore);
+  const [filterScoreMax, setFilterScoreMax] = useState(maxScore);
+  const [showScoreFilter, setShowScoreFilter] = useState(false);
   const [sortConfig, setSortConfig] = useState({ key: null, direction: 'none' });
+  const scoreFilterWrapperRef = useRef(null);
+  const scoreRange = maxScore - minScore || 1;
+  const minThumbPosition = ((filterScoreMin - minScore) / scoreRange) * 100;
+  const maxThumbPosition = ((filterScoreMax - minScore) / scoreRange) * 100;
+  const isScoreFilterModified = filterScoreMin !== minScore || filterScoreMax !== maxScore;
 
-  const relations = [...new Set(mockUsers.map(user => user.relation))];
-  const countries = [...new Set(mockUsers.map(user => user.country.name))];
+  useEffect(() => {
+    if (!showScoreFilter) {
+      return undefined;
+    }
 
-  const filteredUsers = mockUsers.filter(user => {
+    const closeWhenOutside = (event) => {
+      if (!scoreFilterWrapperRef.current?.contains(event.target)) {
+        setShowScoreFilter(false);
+      }
+    };
+
+    document.addEventListener('pointerdown', closeWhenOutside);
+    document.addEventListener('focusin', closeWhenOutside);
+
+    return () => {
+      document.removeEventListener('pointerdown', closeWhenOutside);
+      document.removeEventListener('focusin', closeWhenOutside);
+    };
+  }, [showScoreFilter]);
+
+  const handleMinScoreChange = (value) => {
+    const nextMin = Number(value);
+    if (filterScoreMin === filterScoreMax && nextMin > filterScoreMin) {
+      setFilterScoreMax(nextMin);
+      return;
+    }
+    setFilterScoreMin(Math.min(nextMin, filterScoreMax));
+  };
+
+  const handleMaxScoreChange = (value) => {
+    const nextMax = Number(value);
+    if (filterScoreMin === filterScoreMax && nextMax < filterScoreMax) {
+      setFilterScoreMin(nextMax);
+      return;
+    }
+    setFilterScoreMax(Math.max(nextMax, filterScoreMin));
+  };
+
+  const resetScoreFilter = () => {
+    setFilterScoreMin(minScore);
+    setFilterScoreMax(maxScore);
+  };
+
+  const relations = [...new Set(users.map(user => user.relation))];
+  const countries = [...new Set(users.map(user => user.country.name))];
+
+  const filteredUsers = users.filter(user => {
     const matchesSearch = 
-      user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      user.username.toLowerCase().includes(searchTerm.toLowerCase()) || 
       user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
       user.company.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesRelation = filterRelation === '' || user.relation === filterRelation;
     const matchesCountry = filterCountry === '' || user.country.name === filterCountry;
+    const matchesScoreRange = user.score >= filterScoreMin && user.score <= filterScoreMax;
 
-    return matchesSearch && matchesRelation && matchesCountry;
+    return matchesSearch && matchesRelation && matchesCountry && matchesScoreRange;
   });
 
   // sort:
@@ -221,6 +175,65 @@ function Dashboard() {
               <option key={country} value={country}>{country}</option>
             ))}
           </select>
+
+          <div ref={scoreFilterWrapperRef} className="score-filter-wrapper">
+            <button
+              type="button"
+              className={`filter-input score-filter-toggle ${isScoreFilterModified ? 'score-filter-toggle-active' : ''}`}
+              onClick={() => setShowScoreFilter(!showScoreFilter)}
+            >
+              {isScoreFilterModified ? `Score range: ${filterScoreMin} - ${filterScoreMax}` : 'All scores'}
+            </button>
+
+            {showScoreFilter && (
+              <div className="score-range-panel">
+                <div className="score-range-header">
+                  <span className="score-range-label">Range: <strong>{filterScoreMin}</strong> - <strong>{filterScoreMax}</strong></span>
+                  <button
+                    type="button"
+                    className="score-reset-button"
+                    onClick={resetScoreFilter}
+                  >
+                    Reset
+                  </button>
+                </div>
+
+                <div
+                  className="score-dual-slider"
+                  style={{
+                    '--min-percent': `${minThumbPosition}%`,
+                    '--max-percent': `${maxThumbPosition}%`
+                  }}
+                >
+                  <div className="score-slider-track" />
+                  <div className="score-slider-selected" />
+                  <input
+                    id="min-score-slider"
+                    type="range"
+                    min={minScore}
+                    max={maxScore}
+                    value={filterScoreMin}
+                    onChange={(e) => handleMinScoreChange(e.target.value)}
+                    className="score-slider score-slider-min"
+                  />
+                  <input
+                    id="max-score-slider"
+                    type="range"
+                    min={minScore}
+                    max={maxScore}
+                    value={filterScoreMax}
+                    onChange={(e) => handleMaxScoreChange(e.target.value)}
+                    className="score-slider score-slider-max"
+                  />
+                </div>
+
+                <div className="score-range-limits">
+                  <span>{minScore}</span>
+                  <span>{maxScore}</span>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="dashboard-table-container">
@@ -241,7 +254,7 @@ function Dashboard() {
               {sortedUsers.length > 0 ? (
                 sortedUsers.map((user) => (
                   <tr key={user.id} className="dashboard-row">
-                    <td className="font-semibold">{user.name}</td>
+                    <td className="font-semibold">{user.username}</td>
                     <td>{user.email}</td>
                     <td>
                       <div className="country-info">
@@ -254,16 +267,16 @@ function Dashboard() {
                       </div>
                     </td>
                     <td>
-                      <span className={`status-badge ${user.state === 'Active' ? 'status-active' : 'status-inactive'}`}>
-                        {user.state}
+                      <span className={`status-badge ${user.state == true ? 'status-active' : 'status-inactive'}`}>
+                        {user.state == true ? 'Active' : 'Inactive'}
                       </span>
                     </td>
                     <td>
                       <span className="relation-badge">{user.relation}</span>
                     </td>
                     <td>{user.company}</td>
-                    <td className="number-col font-mono">{user.gamesPlayed}</td>
-                    <td className="number-col font-mono text-blue font-bold">{user.maxScore}</td>
+                    <td className="number-col font-mono">{user.gamesplayed}</td>
+                    <td className="number-col font-mono text-blue font-bold">{user.score}</td>
                   </tr>
                 ))
               ) : (
