@@ -5,7 +5,9 @@ import en from "i18n-iso-countries/langs/en.json";
 import './Register.css';
 import {registerUser} from '../services/register.js'
 import { verifyEmailDuplicates } from '../services/verifyEmailDuplicates.js';
+import { verifyPhoneDuplicates } from '../services/verifyPhoneDuplicates.js';
 import { Link, useNavigate} from 'react-router-dom';
+import {useAuth} from '../context/AuthContext.jsx';
 
 countries.registerLocale(en);
 
@@ -19,10 +21,11 @@ const countryList = Object.entries(
 
 function Register() {
   const navigate = useNavigate(); 
+  const { login } = useAuth(); 
 
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
-  const [emailError, setEmailError] = useState('');
+  const [error, setError] = useState('');
   const [password, setPassword] = useState('');
   const [relationToRockwell, setRelationToRockwell] = useState('');
   const [birthDate, setBirthDate] = useState('');
@@ -33,20 +36,16 @@ function Register() {
   const [query, setQuery] = useState('');
 
   useEffect(() => {
-      if (!email) return; 
-      
-      const timeoutId = setTimeout(async () => {
-        const exists = await verifyEmailDuplicates(email);
-        console.log(exists);
-        if(exists){
-          setEmailError('This email is already in use.');
-        } else {
-          setEmailError('');
-        }
-      }, 500);
-
-      return () => clearTimeout(timeoutId);
+      if(email && email.endsWith('@rockwellautomation.com')) {
+        setRelationToRockwell("Employee");
+      }
   }, [email]);
+
+  useEffect(() => {
+    if (query === '') {
+      setSelectedCountry(countryList[223]);
+    }
+  }, [query]);
 
   const filteredCountries =
     query === ""
@@ -55,7 +54,7 @@ function Register() {
           country.name.toLowerCase().includes(query.toLowerCase())
         );
 
-  const handleRegistrar = (evento) => {
+  const handleRegistrar = async (evento) => {
     evento.preventDefault();
 
     const Usuario = {
@@ -69,7 +68,30 @@ function Register() {
       birthday:birthDate,
     };
     
-    registerUser(Usuario, navigate);
+    const checkDuplicates =  async () => {
+      const emailExists =  await verifyEmailDuplicates(email);
+      if (phone) {
+        const phoneExists =  await verifyPhoneDuplicates(phone);
+        return emailExists || phoneExists;
+      }
+      return emailExists;
+    }
+
+    const areDuplicates = await checkDuplicates();
+
+    if(areDuplicates ){ 
+      setError('Email or phone number is already in use.');
+    } else {
+      const registration=await registerUser(Usuario);
+      console.log(registration)
+      if (registration.success) {
+          login(registration.user);
+          navigate('/home');
+      }
+      else {
+        setError(registration.message);
+      }
+    }
     evento.preventDefault(); // do not reload
   };
 
@@ -102,7 +124,6 @@ function Register() {
           />
         </div>
 
-        {emailError && <div className="error">{emailError}</div>}
 
         <div className="input-group">
           <label htmlFor="phone">Phone: </label>
@@ -112,6 +133,7 @@ function Register() {
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
             placeholder="Insert your phone"
+            pattern="^\+?[0-9\s\-]{7,15}$"
           />
         </div>
 
@@ -135,11 +157,15 @@ function Register() {
             onChange={(e) => setRelationToRockwell(e.target.value)}
             required
           >
-            // These options are just examples, we need an array of possible relations to rockwell to map here
-            <option value="">Select your relation</option>
-            <option value="Employee">Employee</option>
-            <option value="Client">Client</option>
-            <option value="Not related">Not related</option>
+            {(email && email.endsWith('@rockwellautomation.com')) ? (
+              <option value="Employee">Employee</option>
+            ) : (
+              <>
+                <option value="">Select your relation</option>
+                <option value="Client">Client</option>
+                <option value="Not related">Not related</option>
+              </>
+            )}
           </select>
         </div>
 
@@ -165,6 +191,7 @@ function Register() {
             value={birthDate}
             onChange={(e) => setBirthDate(e.target.value)}
             max="2026-02-27"
+            min="1900-01-01"
             
           />
         </div>
@@ -211,6 +238,8 @@ function Register() {
             </div>
             </Combobox>
         </div>
+
+        {error && <div className="error">{error}</div>}
 
         <button type="submit">Register</button>
 

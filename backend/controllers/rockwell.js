@@ -19,13 +19,7 @@ export class RockwellController {
   }
 
   
-  getById = async (req, res) => {
-    const { id } = req.params
-    const user = await this.model.getById({ id })
-    if (user) return res.json(user)
-    res.status(404).json({ message: 'User not found' })
-  }
-
+  
   
   create = async (req, res) => {
     const result = validateUser(req.body)
@@ -34,7 +28,7 @@ export class RockwellController {
     if (!result.success) {
     // 422 Unprocessable Entity
     // 400 Bad Request
-      return res.status(400).json({ error: JSON.parse(result.error.message) })
+      return res.status(400).json( JSON.parse(result.error.message) )
     }
 
     let newUser = {};
@@ -53,6 +47,7 @@ export class RockwellController {
     )
 
     const isProduction = process.env.NODE_ENV === 'production';
+    const adminRole = await this.model.getAdminRoleId();
 
     res.cookie('token', token, {
       httpOnly: true,
@@ -61,13 +56,18 @@ export class RockwellController {
        secure: isProduction
     })
     .status(201)
-    .json( {newUser} )
-
+    .json({ success: true,
+          user: {
+            username: newUser.name,
+            user_id:  newUser.user_id,
+            isAdmin:  newUser.role === adminRole
+          }
+        })
   }
   
   session = async (req,res) => {
     // Todo: Possibly change for the tokenParser middleware option but it's working fine now
-    const token = req.cookies.token
+    const token = req.cookies.token;
     if (!token) {
       return res.status(401).json({ activeSession:false})
     }
@@ -82,7 +82,7 @@ export class RockwellController {
       console.log('User is admin:', data.role === adminRole); // Remove this line in production
       return res.json({ activeSession:true, 
         user :{
-            username: data.name,
+            username: data.username,
             user_id: data.user_id,
             isAdmin: data.role === adminRole
         }
@@ -93,10 +93,55 @@ export class RockwellController {
 
   }
 
+
+  getById = async (req, res) => {
+    const token = req.cookies.token
+    
+    if (!token) {
+      return res.status(401).json({ activeSession:false})
+    }
+
+    
+    const userData = jwt.verify(token, process.env.SECRET_JWT_KEY)
+    console.log('Decoded token data:', userData) // Remove this line in production
+    
+
+    console.log('Session data:', userData)
+   // Remove this line in production
+    const user = await this.model.getById({ userData })
+    if (user) return res.status(200).json(user)
+    res.status(404).json({ message: 'User not found' })
+  }
+
+  getGamesByUser = async (req, res) => {
+    const token = req.cookies.token;
+     if (!token) {
+      return res.status(401).json({ activeSession:false})
+    }
+
+    
+    const userData = jwt.verify(token, process.env.SECRET_JWT_KEY)
+    console.log('Decoded token data:', userData) // Remove this line in production
+    const games = await this.model.getGamesByUser({ userData })
+    return res.status(200).json(games)
+
+  }
+
     checkEmail = async (req, res) => {
       const { email } = req.query
 
       const user = await this.model.checkEmail({ email })
+
+      if (user) {
+        return res.json({ exists: true })
+      }
+      return res.json({ exists: false })
+    }
+
+    checkPhone = async (req, res) => {
+      const { phone } = req.query
+
+      const user = await this.model.checkPhone({ phone })
 
       if (user) {
         return res.json({ exists: true })
